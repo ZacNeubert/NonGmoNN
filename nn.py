@@ -2,6 +2,13 @@ from random import random
 import numpy as np
 
 
+def prepend_1(matrix):
+    l = matrix.tolist()
+    if isinstance(l[0], list):
+        l = l[0]
+    return np.matrix([1] + l)
+
+
 class OutputType:
     softmax = lambda outputs: [o / sum(outputs) for o in outputs]
     sigmoid = 1
@@ -19,7 +26,6 @@ class Neuron:
         self.activation_type = activation_type
         self.learning_rate = learning_rate
         self.weights = np.matrix([random() for _ in range(input_size)])
-        self.bias = random()
 
     def __str__(self):
         return '''
@@ -36,8 +42,8 @@ class Neuron:
 
     def get_output(self, inputs):
         out = self.weights.dot(inputs)
-        out = self.activation_type(self.bias + out)
-        return out[0,0]
+        out = self.activation_type(out)
+        return out[0, 0]
 
     def train(self, inputs, expected_output):
         output = self.get_output(inputs)
@@ -89,19 +95,18 @@ class NeuralNetwork:
         # each layer's input size is the number of neurons in the previous layer
         self.layers = []
         for i, (count, activation) in enumerate(zip(self.hidden_layer_neuron_counts, self.hidden_layer_activations)):
-            print('Appended layer')
             if i == 0:
-                self.layers.append(Layer(input_size=self.input_count,
+                self.layers.append(Layer(input_size=self.input_count + 1,
                                          neuron_count=count,
                                          activation_type=activation,
                                          learning_rate=self.learning_rate))
             else:
-                self.layers.append(Layer(input_size=self.layers[i - 1].neuron_count,
+                self.layers.append(Layer(input_size=self.layers[i - 1].neuron_count + 1,
                                          neuron_count=count,
                                          activation_type=activation,
                                          learning_rate=self.learning_rate))
 
-        self.layers.append(Layer(input_size=self.layers[-1].neuron_count,
+        self.layers.append(Layer(input_size=self.layers[-1].neuron_count + 1,
                                  neuron_count=self.output_count,
                                  activation_type=ActivationType.sum,
                                  learning_rate=self.learning_rate))
@@ -122,23 +127,24 @@ Layers: {}
     def train(self, data):
         pass
 
-    def test(self, test_data, test_answers, report_every=5, report_success=False):
+    def test(self, test_data, test_answers, report=False, report_every=5, report_success=False):
         correct = 0
         total = 0
         for datum, true_answer in zip(test_data, test_answers):
             total += 1
-            if total % report_every == 0:
+            if total % report_every == 0 and report:
                 print('Classified {} out of {}'.format(total, len(test_answers)))
             answer = self.classify(datum)
-            if report_success and answer == true_answer:
-                print('CORRECT')
+            if answer == true_answer:
+                if report_success:
+                    print('CORRECT c{}==t{}'.format(answer, true_answer))
                 correct += 1
 
         return correct / total
 
     def classify(self, datum):
-        inputs = datum
+        inputs = prepend_1(datum)
         for layer in self.layers:
-            inputs = layer.process_input(inputs.reshape(-1, 1))
-        output = self.output_type(inputs)
+            inputs = prepend_1(layer.process_input(inputs.reshape(-1, 1)))
+        output = self.output_type(inputs.tolist()[0])
         return output.index(max(output))

@@ -3,6 +3,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
+from helpers import percentage
 from nn import NeuralNetwork, ActivationType
 from timer import Timer
 
@@ -40,7 +41,16 @@ print('X_test={}'.format(len(X_test)))
 #plot_digits(X_train, y_train)
 
 limit = 1000
-nn = NeuralNetwork(28*28, [int((28*28 + 10)/2)], [ActivationType.relu], 10)
-with Timer(lambda t: print('Took {} seconds'.format(t))):
-    accuracy = nn.test(X_train[:limit], y_train[:limit], report_every=100)
-    print('Accuracy: {}'.format(accuracy))
+best = None
+best_accuracy = 0.0
+for i in range(100):
+    nn = NeuralNetwork(28*28, [int((28*28 + 10)/2)], [ActivationType.relu], 10)
+    with Timer(lambda t: print('Took {} seconds'.format(t))):
+        accuracy = nn.test(X_train[:limit], y_train[:limit])
+        if accuracy > best_accuracy:
+            best = nn
+            best_accuracy = accuracy
+        print('Best Acc: {}'.format(percentage(best_accuracy)))
+        print('Accuracy: {}'.format(percentage(accuracy)))
+
+print('Best Accuracy of random NNs: {}'.format(percentage(best_accuracy)))
