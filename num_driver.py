@@ -1,8 +1,8 @@
-from tensorflow.examples.tutorials.mnist import input_data
+import random
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
-import json
 
 from helpers import percentage
 from nn import NeuralNetwork, ActivationType
@@ -11,25 +11,10 @@ from timer import Timer
 from datetime import datetime
 from time import time
 
+from gendat import gendat
+import json
 
-def plot_digits(X_train, y_train):
-    f, axarr = plt.subplots(4, 3)
-    axarr = axarr.reshape(1, -1)
-    for d in range(50):
-        digit, y = X_train[d], y_train[d]
-        digit_image = digit.reshape(28, 28)
-        axarr[0][y].imshow(digit_image, cmap=mpl.cm.binary, interpolation='nearest')
-        axarr[0][y].axis('off')
-
-    axarr[0][10].axis('off')
-    axarr[0][11].axis('off')
-
-    plt.axis('off')
-    plt.savefig('./digits.png')
-    plt.show()
-
-
-fname = 'mnist{}.log'.format(str(datetime.now()).replace(':', '.'))
+fname = 'num{}.log'.format(str(datetime.now()).replace(':', '.'))
 start_time = time()
 
 
@@ -43,37 +28,51 @@ def append_progress(iter, acc):
         outf.write('{},{},{}\n'.format(iter, acc, time() - start_time))
 
 
-mnist = input_data.read_data_sets('/tmp/data/')
+def double_shuffle(l1, l2):
+    combined = list(zip(l1, l2))
+    random.shuffle(combined)
+    l1[:], l2[:] = zip(*combined)
+    return l1, l2
 
-X_train = mnist.train.images
-y_train = mnist.train.labels.astype('int')
 
-X_test = mnist.test.images
-y_test = mnist.test.labels.astype('int')
+zs, os = 900, 900
+zstest, ostest = 100, 100
+
+pre_rand_train_x = gendat(0, zs) + gendat(1, os)
+pre_rand_train_y = [0 for _ in range(900)] + [1 for _ in range(os)]
+
+rand_x, rand_y = double_shuffle(pre_rand_train_x, pre_rand_train_y)
+
+X_train = np.matrix(rand_x)
+y_train = np.matrix(rand_y)
+
+X_test = np.matrix(gendat(0, zstest) + gendat(1, ostest))
+y_test = np.matrix([0 for _ in range(zstest)] + [1 for _ in range(ostest)])
 
 print('X_train.shape={}, y_train.shape={}'.format(X_train.shape, y_train.shape))
 print('X_test.shape={}, y_test.shape={}'.format(X_test.shape, y_test.shape))
 print('X_train={}'.format(len(X_train)))
 print('X_test={}'.format(len(X_test)))
 
-limit = 2000000
-iterations = 100
 neurons = [300, 100]
-momentum = .0
-append_params(neurons=neurons, momentum=momentum)
+activation = [ActivationType.relu, ActivationType.relu]
+batch_size = 100
+momentum = 0.8
+append_params(neurons=neurons, learning_rate=.005, batch_size=batch_size, momentum=momentum)
+nn = NeuralNetwork(2, neurons, activation, 2, momentum=momentum)
 
-nn = NeuralNetwork(28 * 28, neurons, [ActivationType.relu], 10, momentum=momentum)
 with Timer(lambda t: print('Took {} seconds'.format(t))):
-    accuracy = nn.test(X_train[:limit], y_train[:limit])
+    accuracy = nn.test(X_train.tolist(), y_train.tolist()[0])
     print('Accuracy: {}'.format(percentage(accuracy)))
 
+iterations = 100000
 for i in range(iterations):
     with Timer(lambda t: print('Training took {} seconds'.format(t))):
         print('Training...')
-        nn.train(X_train, y_train, batch_size=100)
+        nn.train(X_train.tolist(), y_train.tolist()[0], batch_size=batch_size)
     if i % 1 == 0:
         print('Testing...')
         with Timer(lambda t: print('Testing took {} seconds'.format(t))):
-            accuracy = nn.test(X_test[:limit], y_test[:limit])
+            accuracy = nn.test(X_test.tolist(), y_test.tolist()[0])
             append_progress(i, accuracy)
             print('Accuracy: {}'.format(percentage(accuracy)))
