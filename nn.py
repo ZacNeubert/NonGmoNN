@@ -30,12 +30,14 @@ class OutputFunction:
 
 
 cache = {}
+
+
 def cached_exp(n):
     global cache
     if n in cache.keys():
         return cache[n]
     else:
-        if len(cache) > 1000:
+        if len(cache) > 100:
             cache = {}
         result = exp(n)
         cache[n] = result
@@ -62,9 +64,13 @@ class OutputType:
 
 
 class ActivationType:
-    relu = lambda out: max(0, out)
-    sum = lambda out: sum([out])
+    relu = lambda out: np.matrix([i if i > 0 else 0 for i in vec_to_list(out)])
+    sum = lambda out: out
     sigmoid = 1
+
+
+def vec_to_list(v):
+    return v.tolist()[0]
 
 
 def estimate_deriv(func, i, *args, **kwargs):
@@ -74,8 +80,8 @@ def estimate_deriv(func, i, *args, **kwargs):
 
 def softmax_deriv(i, x_vec):
     for d in (1, 10, 100, 1000, 10000, 100000):
-        smaller = [x if j != i else x - d for j, x in enumerate(x_vec)]
-        larger = [x if j != i else x + d for j, x in enumerate(x_vec)]
+        smaller = [x if j != i else x - d for j, x in enumerate(vec_to_list(x_vec))]
+        larger = [x if j != i else x + d for j, x in enumerate(vec_to_list(x_vec))]
         larger_out = softmax_single(i, larger)
         smaller_out = softmax_single(i, smaller)
         result = (larger_out - smaller_out) / (2 * d)
@@ -84,86 +90,31 @@ def softmax_deriv(i, x_vec):
     return result
 
 
-class Neuron:
-    def __init__(self, input_size, activation_type, learning_rate, beta=0.8):
-        self.input_size = input_size
-        self.activation_type = activation_type
-        self.learning_rate = learning_rate
-        self.weights = np.matrix([random() for _ in range(input_size)])
-        self.beta = beta
-        self.pre_act_last_output = None
-        self.post_act_last_output = None
-        self.last_inputs = None
-        self.last_changes = None
-
-    def __str__(self):
-        return '''
-        Neuron:
-        Weights: {}
-        {}
-        '''.format(
-            str(self.weights.shape),
-            ','.join(['{:.02f}'.format(w) for w in self.weights.tolist()[0]])
-        )
-
-    def __repr__(self):
-        return str(self)
-
-    def get_weight(self, n):
-        return self.weights[0, n]
-
-    def get_output(self, inputs):
-        self.last_inputs = inputs
-        out = self.weights.dot(inputs)
-        self.pre_act_last_output = out[0, 0]
-        out = self.activation_type(out)
-        if isinstance(out, np.matrix):
-            self.post_act_last_output = out[0, 0]
-            return out[0, 0]
-        elif isinstance(out, int):
-            self.post_act_last_output = out
-            return out
-        else:
-            print(type(out))
-            raise Exception('Something bad happened')
-
-    def adjust_weights(self, grad):
-        changes = [self.learning_rate * grad * x[0, 0] for x in self.last_inputs]
-        if self.last_changes and self.beta:
-            changes = [c * self.beta + old_c * (1 - self.beta) for c, old_c in zip(changes, self.last_changes)]
-        self.weights = np.matrix([w - c for w, c in zip(self.weights.tolist()[0], changes)])
-        self.last_changes = changes
-
-
 class Layer:
     def __init__(self, input_size, neuron_count, learning_rate, activation_type=ActivationType.relu, momentum=0.0):
         self.iter = 0
+        self.activation = activation_type
         self.input_size = input_size
         self.momentum = momentum
+        self.learning_rate = learning_rate
         self.neuron_count = neuron_count
-        self.neurons = [Neuron(input_size=input_size,
-                               activation_type=activation_type,
-                               beta=momentum,
-                               learning_rate=learning_rate) for _ in range(neuron_count)]
-
-    @property
-    def layer_weights(self):
-        return np.matrix([n.weights.tolist()[0] for n in self.neurons])
+        self.weights = np.matrix([[random() for _ in range(input_size)] for __ in range(neuron_count)])
+        self.last_inputs = None
+        self.post_act_last_output = None
+        self.pre_act_last_output = None
 
     def process_input(self, inputs):
-        return inputs
-        output = [neuron.get_output(inputs=inputs) for neuron in self.neurons]
-        output = np.matrix(output)
-        return output
+        self.last_inputs = inputs
+        self.pre_act_last_output = self.weights.dot(inputs).T
+        self.post_act_last_output = self.activation(self.pre_act_last_output)
+        return self.post_act_last_output
 
     def __str__(self):
         return '''
     Layer:
-    Neurons: {}
-    {}
+    Shape: {}
         '''.format(
-            len(self.neurons),
-            '\n'.join([str(neuron) for neuron in self.neurons])
+            self.weights.shape,
         )
 
     def __repr__(self):
@@ -235,19 +186,26 @@ Layers: {}
             diffs = outputs - np.matrix(correct)
             calc_answer = outputs.index(max(outputs))
             if answer != calc_answer:
-                for i, (diff, neuron) in enumerate(zip(diffs.tolist()[0], self.layers[-1].neurons)):
-                    pre_out = outputs_by_layer[-2].tolist()[0][1:]
-                    grad = softmax_deriv(i, x_vec=pre_out)
-                    grad = grad * diff
-                    neuron.adjust_weights(grad)
-                    for n, middle_neuron in enumerate(self.layers[-2].neurons):
-                        if middle_neuron.post_act_last_output > 0:
-                            middle_diff = grad * neuron.get_weight(n + 1)
-                            middle_neuron.adjust_weights(middle_diff)
-                            #if len(self.layers) > 2:
-                            #    for m, back_neuron in enumerate(self.layers[-3].neurons):
-                            #        back_diff = middle_diff * middle_neuron.get_weight(m + 1)
-                            #        back_neuron.adjust_weights(back_diff)
+                output_layer = self.layers[-1]
+                pre_out = output_layer.pre_act_last_output
+                gradients = np.matrix([softmax_deriv(i, x_vec=pre_out) for i in range(output_layer.neuron_count)])
+                gradients = np.multiply(gradients, diffs)
+                changes = output_layer.last_inputs * output_layer.learning_rate * gradients
+
+                output_layer_weights_wout_bias = output_layer.weights[:, 1:]
+                middle_layer = self.layers[-2]
+                middle_gradients = gradients.dot(output_layer_weights_wout_bias)
+                middle_changes = middle_layer.last_inputs * middle_layer.learning_rate * middle_gradients
+
+                if len(self.layers) > 2:
+                    middle_layer_weights_wout_bias = middle_layer.weights[:, 1:]
+                    back_layer = self.layers[-3]
+                    back_gradients = middle_gradients.dot(middle_layer_weights_wout_bias)
+                    back_changes = back_layer.last_inputs * back_layer.learning_rate * back_gradients
+                    back_layer.weights = back_layer.weights - back_changes.T
+
+                output_layer.weights = output_layer.weights - changes.T
+                middle_layer.weights = middle_layer.weights - middle_changes.T
 
     def test(self, test_data, test_answers, report=False, report_every=5, report_success=False):
         correct = 0

@@ -57,9 +57,9 @@ print('X_test={}'.format(len(X_test)))
 
 neurons = [5, 10]
 activation = [ActivationType.relu, ActivationType.relu]
-batch_size = 10
+batch_size = 100
 momentum = 0.8
-learning_rate = .005
+learning_rate = .0005
 append_params(neurons=neurons, learning_rate=learning_rate, batch_size=batch_size, momentum=momentum)
 nn = NeuralNetwork(2, neurons, activation, 2, momentum=momentum, learning_rate=learning_rate)
 
@@ -69,12 +69,8 @@ with Timer(lambda t: print('Took {} seconds'.format(t))):
 
 iterations = 100000
 for i in range(iterations):
-    if i % 1 == 0 or i == 0:
-        print('Testing...')
-        with Timer(lambda t: print('Testing took {} seconds'.format(t))):
-            accuracy = nn.test(X_test.tolist(), y_test.tolist()[0])
-            append_progress(i, accuracy)
-            print('Accuracy: {}'.format(percentage(accuracy)))
-    with Timer(lambda t: print('Training took {} seconds'.format(t))):
-        print('Training...')
-        nn.train(X_train.tolist(), y_train.tolist()[0], batch_size=batch_size)
+    if i % 100 == 0 or i == 0:
+        accuracy = nn.test(X_test.tolist(), y_test.tolist()[0])
+        append_progress(i, accuracy)
+        print('Accuracy: {}'.format(percentage(accuracy)))
+    nn.train(X_train.tolist(), y_train.tolist()[0], batch_size=batch_size)

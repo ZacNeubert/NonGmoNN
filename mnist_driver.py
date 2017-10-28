@@ -58,22 +58,20 @@ print('X_test.shape={}, y_test.shape={}'.format(X_test.shape, y_test.shape))
 print('X_train={}'.format(len(X_train)))
 print('X_test={}'.format(len(X_test)))
 
-limit = 2000000
-iterations = 10000
-neurons = [10]
-momentum = .8
-learning_rate = .50
-batch_size = 100
+iterations = 5000000000
+neurons = [300]
+momentum = .0
+learning_rate = .02
+batch_size = 1000
+report_every = 10
 append_params(neurons=neurons, momentum=momentum, learning_rate=learning_rate, batch_size=batch_size)
 
 nn = NeuralNetwork(28 * 28, neurons, [ActivationType.relu, ActivationType.relu], 10, momentum=momentum, learning_rate=learning_rate)
 for i in range(iterations):
-    if i % 1 == 0:
-        print('Testing...')
-        with Timer(lambda t: print('Testing took {} seconds'.format(t))):
-            accuracy = nn.test(X_test[:limit], y_test[:limit])
+    if i % report_every == 0:
+        with Timer(lambda t: print('Testing took {:.2f} seconds'.format(t))):
+            accuracy = nn.test(X_test, y_test)
             append_progress(i, accuracy)
             print('Accuracy: {}'.format(percentage(accuracy)))
-    with Timer(lambda t: print('Training took {} seconds'.format(t))):
-        print('Training...')
+    with Timer(lambda t: print('Training batch {}/{} took {:.2f} seconds'.format((i % 10) + 1, report_every, t))):
         nn.train(X_train, y_train, batch_size=batch_size)
