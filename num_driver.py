@@ -14,13 +14,14 @@ from time import time
 from gendat import gendat
 import json
 
-fname = 'num{}.log'.format(str(datetime.now()).replace(':', '.'))
+fname = 'logs/assgn/num{}.log'.format(str(datetime.now()).replace(':', '.'))
 start_time = time()
 
 
 def append_params(**params):
     with open(fname, 'a') as outf:
         outf.write(json.dumps(params))
+        outf.write('\n')
 
 
 def append_progress(iter, acc):
@@ -54,12 +55,13 @@ print('X_test.shape={}, y_test.shape={}'.format(X_test.shape, y_test.shape))
 print('X_train={}'.format(len(X_train)))
 print('X_test={}'.format(len(X_test)))
 
-neurons = [300, 100]
+neurons = [5, 10]
 activation = [ActivationType.relu, ActivationType.relu]
-batch_size = 100
+batch_size = 10
 momentum = 0.8
-append_params(neurons=neurons, learning_rate=.005, batch_size=batch_size, momentum=momentum)
-nn = NeuralNetwork(2, neurons, activation, 2, momentum=momentum)
+learning_rate = .005
+append_params(neurons=neurons, learning_rate=learning_rate, batch_size=batch_size, momentum=momentum)
+nn = NeuralNetwork(2, neurons, activation, 2, momentum=momentum, learning_rate=learning_rate)
 
 with Timer(lambda t: print('Took {} seconds'.format(t))):
     accuracy = nn.test(X_train.tolist(), y_train.tolist()[0])
@@ -67,12 +69,12 @@ with Timer(lambda t: print('Took {} seconds'.format(t))):
 
 iterations = 100000
 for i in range(iterations):
-    with Timer(lambda t: print('Training took {} seconds'.format(t))):
-        print('Training...')
-        nn.train(X_train.tolist(), y_train.tolist()[0], batch_size=batch_size)
-    if i % 1 == 0:
+    if i % 1 == 0 or i == 0:
         print('Testing...')
         with Timer(lambda t: print('Testing took {} seconds'.format(t))):
             accuracy = nn.test(X_test.tolist(), y_test.tolist()[0])
             append_progress(i, accuracy)
             print('Accuracy: {}'.format(percentage(accuracy)))
+    with Timer(lambda t: print('Training took {} seconds'.format(t))):
+        print('Training...')
+        nn.train(X_train.tolist(), y_train.tolist()[0], batch_size=batch_size)

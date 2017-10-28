@@ -19,8 +19,6 @@ class OutputFunction:
         self.deriv = deriv
 
     def __call__(self, *args, deriv=False, **kwargs):
-        largest = max(args[0])
-        smallest = min(args[0])
         try:
             if deriv:
                 return self.deriv(*args, **kwargs)
@@ -31,9 +29,28 @@ class OutputFunction:
             return None
 
 
+cache = {}
+def cached_exp(n):
+    global cache
+    if n in cache.keys():
+        return cache[n]
+    else:
+        if len(cache) > 1000:
+            cache = {}
+        result = exp(n)
+        cache[n] = result
+        return result
+
+
 def softmax_func(outputs):
     m = max(outputs)
-    return [exp(o - m) / sum([exp(out - m) for out in outputs]) for o in outputs]
+    return [cached_exp(o - m) / sum([cached_exp(out - m) for out in outputs]) for o in outputs]
+
+
+def softmax_single(i, x_vec):
+    m = max(x_vec)
+    x = x_vec[i]
+    return cached_exp(x - m) / sum([cached_exp(o - m) for o in x_vec])
 
 
 class OutputType:
@@ -50,6 +67,23 @@ class ActivationType:
     sigmoid = 1
 
 
+def estimate_deriv(func, i, *args, **kwargs):
+    d = .1
+    return (func(i + d, *args, **kwargs) - func(i - d, *args, **kwargs)) / (2 * d)
+
+
+def softmax_deriv(i, x_vec):
+    for d in (1, 10, 100, 1000, 10000, 100000):
+        smaller = [x if j != i else x - d for j, x in enumerate(x_vec)]
+        larger = [x if j != i else x + d for j, x in enumerate(x_vec)]
+        larger_out = softmax_single(i, larger)
+        smaller_out = softmax_single(i, smaller)
+        result = (larger_out - smaller_out) / (2 * d)
+        if result:
+            return result
+    return result
+
+
 class Neuron:
     def __init__(self, input_size, activation_type, learning_rate, beta=0.8):
         self.input_size = input_size
@@ -57,7 +91,8 @@ class Neuron:
         self.learning_rate = learning_rate
         self.weights = np.matrix([random() for _ in range(input_size)])
         self.beta = beta
-        self.last_output = None
+        self.pre_act_last_output = None
+        self.post_act_last_output = None
         self.last_inputs = None
         self.last_changes = None
 
@@ -67,7 +102,7 @@ class Neuron:
         Weights: {}
         {}
         '''.format(
-            len(self.weights),
+            str(self.weights.shape),
             ','.join(['{:.02f}'.format(w) for w in self.weights.tolist()[0]])
         )
 
@@ -78,31 +113,26 @@ class Neuron:
         return self.weights[0, n]
 
     def get_output(self, inputs):
-        out = self.weights.dot(inputs)
         self.last_inputs = inputs
-        self.last_output = out[0, 0]
+        out = self.weights.dot(inputs)
+        self.pre_act_last_output = out[0, 0]
         out = self.activation_type(out)
         if isinstance(out, np.matrix):
+            self.post_act_last_output = out[0, 0]
             return out[0, 0]
         elif isinstance(out, int):
+            self.post_act_last_output = out
             return out
         else:
             print(type(out))
-            raise Exception('Shit happened')
+            raise Exception('Something bad happened')
 
-    def train(self, inputs, expected_output):
-        output = self.get_output(inputs)
-        difference = output - expected_output
-        self.adjust_weights(difference)
-
-    def adjust_weights(self, difference):
-        changes = [self.learning_rate * x * -difference
-                   for x, w in zip(self.last_inputs.reshape(-1).tolist()[0],
-                                   self.weights.tolist()[0])]
+    def adjust_weights(self, grad):
+        changes = [self.learning_rate * grad * x[0, 0] for x in self.last_inputs]
         if self.last_changes and self.beta:
             changes = [c * self.beta + old_c * (1 - self.beta) for c, old_c in zip(changes, self.last_changes)]
+        self.weights = np.matrix([w - c for w, c in zip(self.weights.tolist()[0], changes)])
         self.last_changes = changes
-        self.weights = np.matrix([w + c for c, w in zip(changes, self.weights.tolist()[0])])
 
 
 class Layer:
@@ -116,7 +146,12 @@ class Layer:
                                beta=momentum,
                                learning_rate=learning_rate) for _ in range(neuron_count)]
 
+    @property
+    def layer_weights(self):
+        return np.matrix([n.weights.tolist()[0] for n in self.neurons])
+
     def process_input(self, inputs):
+        return inputs
         output = [neuron.get_output(inputs=inputs) for neuron in self.neurons]
         output = np.matrix(output)
         return output
@@ -196,19 +231,23 @@ Layers: {}
                     return
             correct = [1 if i == answer else 0 for i in range(self.output_count)]
             outputs, outputs_by_layer = self.process_input(datum)
-            # costs = self.cost(outputs, correct)
+            costs = self.cost(outputs, correct)
             diffs = outputs - np.matrix(correct)
             calc_answer = outputs.index(max(outputs))
             if answer != calc_answer:
-                for diff, neuron in zip(diffs.tolist()[0], self.layers[-1].neurons):
-                    neuron.adjust_weights(diff)
+                for i, (diff, neuron) in enumerate(zip(diffs.tolist()[0], self.layers[-1].neurons)):
+                    pre_out = outputs_by_layer[-2].tolist()[0][1:]
+                    grad = softmax_deriv(i, x_vec=pre_out)
+                    grad = grad * diff
+                    neuron.adjust_weights(grad)
                     for n, middle_neuron in enumerate(self.layers[-2].neurons):
-                        middle_diff = diff * neuron.get_weight(n)
-                        middle_neuron.adjust_weights(middle_diff)
-                        if len(self.layers) > 2:
-                            for m, back_neuron in enumerate(self.layers[-3].neurons):
-                                back_diff = middle_diff * middle_neuron.get_weight(m)
-                                back_neuron.adjust_weights(back_diff)
+                        if middle_neuron.post_act_last_output > 0:
+                            middle_diff = grad * neuron.get_weight(n + 1)
+                            middle_neuron.adjust_weights(middle_diff)
+                            #if len(self.layers) > 2:
+                            #    for m, back_neuron in enumerate(self.layers[-3].neurons):
+                            #        back_diff = middle_diff * middle_neuron.get_weight(m + 1)
+                            #        back_neuron.adjust_weights(back_diff)
 
     def test(self, test_data, test_answers, report=False, report_every=5, report_success=False):
         correct = 0
