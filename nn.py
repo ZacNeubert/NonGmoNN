@@ -120,7 +120,6 @@ class Layer:
     def __repr__(self):
         return str(self)
 
-
 class NeuralNetwork:
     def __init__(self, input_count, hidden_layer_neuron_counts, hidden_layer_activations, output_count,
                  output_type=OutputType.softmax, momentum=0, learning_rate=.005):
@@ -175,21 +174,25 @@ Layers: {}
         shufflable = list(zip(data, answers))
         shuffle(shufflable)
         count = 0
+        wrong = 0
         for datum, answer in shufflable:
             count += 1
             if batch_size:
                 if count > batch_size:
+                    correct_count = batch_size - wrong
+                    print('{:.2f}%, {}/{} correct_count on training data'.format(correct_count / batch_size * 100, correct_count, batch_size))
                     return
-            correct = [1 if i == answer else 0 for i in range(self.output_count)]
             outputs, outputs_by_layer = self.process_input(datum)
-            costs = self.cost(outputs, correct)
-            diffs = outputs - np.matrix(correct)
             calc_answer = outputs.index(max(outputs))
+
+            y = np.matrix([1 if i == answer else 0 for i in range(self.output_count)])
+            y_hat = np.matrix(outputs)
             if answer != calc_answer:
+                wrong += 1
+
                 output_layer = self.layers[-1]
                 pre_out = output_layer.pre_act_last_output
                 gradients = np.matrix([softmax_deriv(i, x_vec=pre_out) for i in range(output_layer.neuron_count)])
-                gradients = np.multiply(gradients, diffs)
                 changes = output_layer.last_inputs * output_layer.learning_rate * gradients
 
                 output_layer_weights_wout_bias = output_layer.weights[:, 1:]
@@ -236,3 +239,21 @@ Layers: {}
         output, outputs_by_layer = self.process_input(datum)
         answer = output.index(max(output))
         return answer
+
+def j_y(y, y_hat):
+    return (-1 * y) / y_hat
+
+def y_z(y, z, l, z_i):
+    sum_e_z = sum([cached_exp(z_j) for z_j in z])
+    e_z_l = cached_exp(z[0, l])
+    e_z_i = cached_exp(z[0, z_i])
+    if l == z_i:
+        return (sum_e_z * e_z_l - e_z_l ** 2) / sum_e_z ** 2
+    else:
+        return (- e_z_l * e_z_i) / sum_e_z ** 2
+
+if __name__ == '__main__':
+    y = np.matrix([1, 0])
+    y_hat = np.matrix([.9, .1])
+
+    print(j_y(y, y_hat))
