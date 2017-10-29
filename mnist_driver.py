@@ -61,20 +61,17 @@ print('X_test={}'.format(len(X_test)))
 iterations = 5000000000
 neurons = [300]
 momentum = .0
-learning_rate = .5
-batch_size = 1000
-report_every = 10
+learning_rate = .005
+batch_size = 100
 best_accuracy = 0
 append_params(neurons=neurons, momentum=momentum, learning_rate=learning_rate, batch_size=batch_size)
 
 nn = NeuralNetwork(28 * 28, neurons, [ActivationType.relu, ActivationType.relu], 10, momentum=momentum, learning_rate=learning_rate)
 for i in range(iterations):
-    if i % report_every == 0:
-        with Timer(lambda t: print('Testing took {:.2f} seconds'.format(t))):
-            accuracy = nn.test(X_test, y_test)
-            if accuracy > best_accuracy:
-                best_accuracy = accuracy
-            append_progress(i, accuracy)
-            print('Accuracy: {}, Best Accuracy: {}'.format(percentage(accuracy), percentage(best_accuracy)), end='')
-    with Timer(lambda t: print('Training batch {}/{} took {:.2f} seconds'.format((i % 10) + 1, report_every, t))):
-        nn.train(X_train, y_train, batch_size=batch_size)
+    with Timer(lambda t: print('Iteration took {:.2f} seconds'.format(t))):
+        accuracy = nn.test(X_test, y_test)
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+        append_progress(i, accuracy)
+        print('Accuracy: {}, Best Accuracy: {}'.format(percentage(accuracy), percentage(best_accuracy)), end=' ')
+        mean_mse = nn.train(X_train, y_train, batch_size=batch_size, shush=True)

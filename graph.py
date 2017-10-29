@@ -42,8 +42,8 @@ def graph(fname, column):
 if __name__ == '__main__':
     if len(argv) < 2:
         from glob import glob
-        fname = glob('logs/num*.log')[-1]
-        column = 'iter'
+        fname = glob('logs/assgn/mnist*.log')[-1]
+        column = 'time'
     else:
         fname = argv[1]
         column = argv[2]

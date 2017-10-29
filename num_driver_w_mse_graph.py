@@ -3,6 +3,7 @@ import random
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 from helpers import percentage
 from nn import NeuralNetwork, ActivationType
@@ -36,11 +37,21 @@ def double_shuffle(l1, l2):
     return l1, l2
 
 
-zs, os = 900, 900
+def read_num(i):
+    numfilename = 'num{}.csv'.format(i)
+    with open(numfilename, 'r') as infile:
+        lines = [[float(f) for f in l.split(',')] for l in infile.readlines()]
+    return lines
+
+
+zeros, ones = 900, 900
 zstest, ostest = 100, 100
 
-pre_rand_train_x = gendat(0, zs) + gendat(1, os)
-pre_rand_train_y = [0 for _ in range(900)] + [1 for _ in range(os)]
+num0 = read_num(0)
+num1 = read_num(1)
+pre_rand_train_x = num0 + num1
+pre_rand_train_y = [0 for _ in range(len(num0))] + [1 for _ in range(len(num1))]
+
 rand_x, rand_y = double_shuffle(pre_rand_train_x, pre_rand_train_y)
 
 X_train = np.matrix(rand_x)
@@ -56,13 +67,10 @@ print('X_test={}'.format(len(X_test)))
 
 neurons = [5]
 activation = [ActivationType.relu, ActivationType.relu]
-batch_size = None
 momentum = 0.0
 learning_rate = .000005
-graphing_mse = True
-iterations = 100
-append_params(neurons=neurons, learning_rate=learning_rate, batch_size=batch_size, momentum=momentum,
-              iterations=iterations)
+iterations = 150
+append_params(neurons=neurons, learning_rate=learning_rate, momentum=momentum)
 nn = NeuralNetwork(2, neurons, activation, 2, momentum=momentum, learning_rate=learning_rate)
 
 with Timer(lambda t: print('Took {} seconds'.format(t))):
@@ -74,10 +82,13 @@ for i in range(iterations):
     if i % 10 == 0 or i == 0:
         accuracy = nn.test(X_test.tolist(), y_test.tolist()[0])
         append_progress(i, accuracy)
-        print('Accuracy: {}'.format(percentage(accuracy)))
-    mean_mse = nn.train(X_train.tolist(), y_train.tolist()[0], batch_size=batch_size, shush=True)
+        print('{}/{} Accuracy: {}'.format(i, iterations, percentage(accuracy)))
+    mean_mse = nn.train(X_train.tolist(), y_train.tolist()[0], shush=True)
+    print(mean_mse)
     mean_mses.append(mean_mse)
 
 plt.plot(mean_mses)
-plt.suptitle('Mean MSE over time')
-plt.show()
+plt.suptitle('Mean MSE over time B={}'.format(momentum))
+figname = './mseb{}.png'.format(int(momentum * 10))
+plt.savefig(figname)
+print(mean_mses)
